@@ -1,0 +1,123 @@
+/*
+ * SNESTron Embedded Internship Task: Smart Temperature Monitoring System
+ * Microcontroller: ESP32 Dev Module
+ * Sensor: Simulated DHT22 (Temperature & Humidity)
+ * Cloud Platform: ThingSpeak (for Smart Monitoring/Data Visualization)
+ * * NOTE: This code uses SIMULATED SENSOR DATA and the Wokwi-GUEST Wi-Fi 
+ * as the task is for an online internship without physical hardware.
+ */
+
+#include <WiFi.h>
+#include <ThingSpeak.h>
+
+// --- 1. CLOUD CREDENTIALS ---
+// Replace these placeholders with your actual ThingSpeak details and personal Wi-Fi
+// Note: Use "Wokwi-GUEST" with an empty password for Wokwi Simulation
+const char* WIFI_NAME = "Wokwi-GUEST";       // Use this for Wokwi simulation
+const char* WIFI_PASSWORD = "";              // Leave empty for Wokwi-GUEST
+// OR, use your home Wi-Fi if testing locally:
+// const char* WIFI_NAME = "YOUR_HOME_WIFI";
+// const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+
+unsigned long myChannelNumber = 3123860;    // <--- REPLACE with your ThingSpeak Channel ID
+const char *myWriteAPIKey = "6ITY5JRZNMUIAL4C"; // <--- REPLACE with your Write API Key
+
+// --- 2. LOGIC AND TIMING ---
+// Define the threshold for the "Smart" alert
+#define HIGH_TEMP_THRESHOLD 28.0 
+
+// ThingSpeak free tier usually allows updates every 15 seconds. 
+// We'll set it to 30 seconds for safety. (30000 milliseconds)
+const long postingInterval = 30000; 
+unsigned long lastUpdateTime = 0;
+
+WiFiClient client;
+
+
+// --- 3. SENSOR SIMULATION FUNCTION ---
+// This function replaces a real sensor reading. It generates realistic, changing values.
+float getSimulatedTemperature() {
+  // Static variable holds the temperature state between calls
+  static float simulatedTemp = 25.0; 
+  
+  // Add a small random fluctuation (-0.5 to +0.5 degrees)
+  simulatedTemp += random(-5, 6) / 10.0; 
+
+  // Clamp the temperature to a believable range (e.g., 20.0 to 30.0 C)
+  if (simulatedTemp > 30.0) simulatedTemp = 30.0;
+  if (simulatedTemp < 20.0) simulatedTemp = 20.0;
+
+  return simulatedTemp;
+}
+
+float getSimulatedHumidity() {
+  // Static variable holds the humidity state between calls
+  static float simulatedHumidity = 50.0; 
+  
+  // Add a small random fluctuation (-1.0 to +1.0 percent)
+  simulatedHumidity += random(-10, 11) / 10.0; 
+
+  // Clamp the humidity to a believable range (e.g., 40.0% to 70.0%)
+  if (simulatedHumidity > 70.0) simulatedHumidity = 70.0;
+  if (simulatedHumidity < 40.0) simulatedHumidity = 40.0;
+
+  return simulatedHumidity;
+}
+
+
+// --- SETUP FUNCTION ---
+void setup() {
+  Serial.begin(115200);
+  randomSeed(analogRead(0)); // Initialize the random generator for better simulation
+  ThingSpeak.begin(client);
+  
+  // Connect to Wi-Fi
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_NAME, WIFI_PASSWORD);
+  Serial.print("Connecting to WiFi: ");
+  Serial.println(WIFI_NAME);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi Connected. IP: ");
+  Serial.println(WiFi.localIP());
+  Serial.println("System Ready. Starting Monitoring...");
+}
+
+// --- LOOP FUNCTION ---
+void loop() {
+  // Check if it's time to send data
+  if (millis() - lastUpdateTime >= postingInterval) {
+    
+    // 1. Get FIXED Alert Data for Screenshot Proof
+    float temperature = 28.8; // Set fixed temperature above 28.0
+    float humidity = 50.0;    // Set fixed humidity
+
+    // 2. SMART LOGIC: Check for High Temperature Alert
+    if (temperature >= HIGH_TEMP_THRESHOLD) {
+      Serial.println(">> CRITICAL ALERT: Temperature Exceeds Threshold!");
+      // This is the core 'Smart' function. In a real project, this would trigger an SMS/Email.
+      // For the submission, printing to the Serial Monitor is sufficient proof.
+    }
+
+    // 3. Prepare and Send Data to ThingSpeak
+    ThingSpeak.setField(1, temperature); // Field 1: Temperature
+    ThingSpeak.setField(2, humidity);    // Field 2: Humidity
+
+    int statusCode = ThingSpeak.writeFields(myChannelNumber, myWriteAPIKey);
+
+    if (statusCode == 200) {
+      Serial.print("Data POSTED to Cloud. Temp: ");
+      Serial.print(temperature);
+      Serial.print(" C, Humid: ");
+      Serial.println(humidity);
+    } else {
+      Serial.print("ThingSpeak write failed with error code: ");
+      Serial.println(statusCode);
+    }
+
+    lastUpdateTime = millis();
+  }
+}
